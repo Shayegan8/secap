@@ -1,11 +1,9 @@
 package main
 
 import (
-	"crypto"
-	"crypto/hmac"
-	"crypto/md5"
+	"crypto/tls"
 	"fmt"
-	"hash"
+	"io"
 	"net"
 	"syscall"
 )
@@ -22,6 +20,7 @@ I need md5, hmac, shake functions
 
 */
 
+/**
 func KDF(key []byte, salt string, path ...[]byte) []byte {
 	hmacCreator := &hMacCreator{value: []byte("VMess AEAD KDF")}
 	hmacCreator = &hMacCreator{value: []byte(salt), parent: hmacCreator}
@@ -48,15 +47,29 @@ func (h *hMacCreator) Create() hash.Hash {
 func cmdKey(uuid []byte) {
 	md5.Sum(append(uuid[:], "c48619fe-8f02-49e0-b9e9-edf763e17e21"...))
 }
+*/
 
-func fuckClient(client net.Conn) {
-
+func fuckClient(client net.Conn) { // maixmum 2mb
+	var password []byte // 56 hex(SHA224(password))
+	_, err := io.ReadFull(client, password)
+	if err != nil {
+		l("Problem with reading packet:", err)
+		return
+	}
 }
 
+/*
+*
+We implement trojan, then we give socks5 packet to our endpoints in local
+*/
 func main() {
-	server, err := net.Listen("tcp", "127.0.0.1:1081")
+	cert, _ := tls.LoadX509KeyPair("server.crt", "server.key")
+	server, err := tls.Listen("tcp", "127.0.0.1:443", &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS13,
+	})
 	if err != nil {
-		l("1081 already being used")
+		l("443 already being used")
 		syscall.Exit(1)
 	}
 	client, _ := server.Accept()
