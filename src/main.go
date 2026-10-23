@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"database/sql"
 	"fmt"
 	"io"
 	"net"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	_ "modernc.org/sqlite"
 )
 
 var l = fmt.Println
@@ -52,37 +57,40 @@ func cmdKey(uuid []byte) {
 */
 
 func fuckClient(client net.Conn) { // maixmum 2mb
-	var password []byte // 56 hex(SHA224(password))
-	passChan := make(chan []byte, 1)
-	timeChan := make(chan any, 1)
-	go func() {
-		_, err := io.ReadFull(client, password)
-		if err != nil {
-			passChan <- []byte{0b0}
-		} else {
-			passChan <- []byte{0b1}
-		}
-	}()
-	go func() {
-		ch := time.NewTimer(5 * time.Second)
-		<-ch.C
-		timeChan <- []byte{}
-	}()
-	select {
-	case msg := <-passChan:
-		if msg[0] == 0b0 {
-			l("Problem with reading packet")
-			_ = client.Close()
-			return
-		}
-	case <-timeChan:
+	client.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var password = make([]byte, 56) // 56 hex(SHA224(password))
+	_, err := io.ReadFull(client, password)
+	if err != nil {
+		l("Problem with reading packet")
 		_ = client.Close()
 		return
 	}
+
 	/*
 		A password can have maximum n mb bandwidth and when i exceed it we simply de alloc memory
 		We check this with redis, the n mb is determined by vps ram
 	*/
+	rows, err := dbo.Query("SELECT * FROM passwords WHERE password=?", password)
+	if err != nil {
+		l(err)
+		client.Close()
+		return
+	}
+	if !rows.Next() {
+		rows.Close()
+		l(err)
+		client.Close()
+		return
+	}
+	rows.Close()
+	restPacket, err := io.ReadAll(io.LimitReader(client, int64(1024*1024*2)))
+	if err != nil {
+		l(err)
+		client.Close()
+		return
+	}
+	cmd := restPacket[2]
+
 }
 
 var Redis_client *redis.Client
@@ -94,7 +102,13 @@ client connects to our endpoint we have 5s deadline
 we check their password in deebee kv storage
 */
 
+var dbo *sql.DB
+
 func main() {
+	dbo, err := sql.Open("sqlite", "demo.db")
+	if err != nil {
+		panic(err)
+	}
 	Redis_client = redis.NewClient(&redis.Options{
 		Network:  "unix",
 		Addr:     "/run/redis/redis-server.sock", // 400
@@ -110,7 +124,16 @@ func main() {
 	}
 	client, _ := server.Accept()
 	go func() {
-		// do something with client
-		fuckClient(client)
+		for {
+			// do something with client
+			fuckClient(client)
+		}
+	}()
+	go func() {
+		signalc, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+		<-signalc.Done()
+		dbo.Close()
+		Redis_client.FlushDB(context.Background())
 	}()
 }
