@@ -90,7 +90,31 @@ func fuckClient(client net.Conn) { // maixmum 2mb
 		return
 	}
 	cmd := restPacket[2]
-
+	atyp := restPacket[3]
+	var dstaddr string
+	var dstport uint16
+	var portoffset uint8
+	var sex string
+	switch restPacket[3] { // ATYP
+	case 0x01: // IPv4
+		ip := net.IP(restPacket[4:8])
+		dstaddr = ip.String()
+		portoffset = 8
+		sex = "v4"
+	case 0x03: // DOMAINNAME
+		l("DOMAIN NAME!")
+		numberOfBytes := restPacket[4]
+		l("number of octets", numberOfBytes)
+		l("the damn thing", string(restPacket[5:numberOfBytes+5]))
+		dstaddr = string(restPacket[5 : numberOfBytes+5])
+		portoffset = 5 + numberOfBytes
+		sex = "domain"
+	case 0x04: // IPv6
+		ip := net.IP(restPacket[4:20])
+		dstaddr = ip.String()
+		portoffset = 20
+		sex = "v6"
+	}
 }
 
 var Redis_client *redis.Client
