@@ -95,7 +95,6 @@ we check their password in deebee kv storage
 */
 
 func main() {
-
 	Redis_client = redis.NewClient(&redis.Options{
 		Network:  "unix",
 		Addr:     "/run/redis/redis-server.sock", // 400
