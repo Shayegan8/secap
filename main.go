@@ -18,14 +18,6 @@ import (
 
 var l = fmt.Println
 
-/*
-*
-TODO:
-
-	make each account available for n people, by limiting ips associated in, bandwidth,
-	making a global bandwidth
-	making a telegram bot that talks with my redis and redis talks with my sqlite
-*/
 func fuckClient(client net.Conn) { // maixmum 2mb
 	first := make([]byte, 60)
 	_, err := client.Read(first)
